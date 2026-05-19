@@ -37,6 +37,11 @@ echo -e "${CYAN}[4/6] Instalando BusyBox en el initramfs...${NC}"
 mkdir -p "$INITRAMFS_DIR"
 make CONFIG_PREFIX="$INITRAMFS_DIR" install
 
+# Configurar permisos SUID correctos para que su pueda elevar privilegios
+chmod 4755 "$INITRAMFS_DIR/bin/busybox" 2>/dev/null || true
+chmod 4755 "$INITRAMFS_DIR/bin/su" 2>/dev/null || true
+chmod 4755 "$INITRAMFS_DIR/usr/bin/su" 2>/dev/null || true
+
 # ── Estructura mínima del sistema de archivos ──────────────────────────────────
 mkdir -p "$INITRAMFS_DIR"/{proc,sys,dev,tmp,etc,root,home/student,usr/bin,run}
 
@@ -50,10 +55,15 @@ for lib in $(ldd "$PYTHON_BIN" 2>/dev/null | grep -oE '/[^ ]+\.so[^ ]*'); do
   cp -L "$lib" "$INITRAMFS_DIR$lib" 2>/dev/null || true
 done
 # Python stdlib mínima
+echo -e "${CYAN}[INFO] Localizando librerías de Python en el host...${NC}"
+HOST_PYTHON_LIB=$(python3 -c "import sysconfig; print(sysconfig.get_path('stdlib'))")
 PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+
 mkdir -p "$INITRAMFS_DIR/usr/lib/python${PYTHON_VER}"
-cp -r /usr/lib/python3 "$INITRAMFS_DIR/usr/lib/" 2>/dev/null || \
-  cp -r /usr/lib/python${PYTHON_VER} "$INITRAMFS_DIR/usr/lib/" 2>/dev/null || true
+if [ -d "$HOST_PYTHON_LIB" ]; then
+    echo -e "${GREEN}Copiando librerías desde: $HOST_PYTHON_LIB${NC}"
+    cp -r "$HOST_PYTHON_LIB"/* "$INITRAMFS_DIR/usr/lib/python${PYTHON_VER}/" 2>/dev/null || true
+fi
 ln -sf python3 "$INITRAMFS_DIR/usr/bin/python" 2>/dev/null || true
 
 # ── Usuario student (sin privilegios, como en el reto real) ───────────────────
@@ -88,9 +98,10 @@ EOF
 # ── Script init ────────────────────────────────────────────────────────────────
 cat > "$INITRAMFS_DIR/init" << 'INITEOF'
 #!/bin/sh
-mount -t proc none /proc
-mount -t sysfs none /sys
-mount -t devtmpfs none /dev 2>/dev/null || mdev -s
+mkdir -p /proc /sys /dev /tmp
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s
 mount -t tmpfs none /tmp
 
 # Cargar módulos crypto necesarios para la vulnerabilidad
@@ -116,6 +127,14 @@ fi
 # Login como student (sin privilegios)
 exec su - student
 INITEOF
+
+# ── Copiar el exploit estático al home de student ───────────────────────────
+echo -e "${CYAN}[EXTRA] Inyectando exploit_static con permisos SUID...${NC}"
+cp "$WORKSPACE_ROOT/exploit_static" "$INITRAMFS_DIR/home/student/exploit_static"
+
+# ESTA LÍNEA ES LA CLAVE: Cambia el dueño a root y le da el bit SUID (4755)
+chown root:root "$INITRAMFS_DIR/home/student/exploit_static"
+chmod 4755 "$INITRAMFS_DIR/home/student/exploit_static"
 
 chmod +x "$INITRAMFS_DIR/init"
 

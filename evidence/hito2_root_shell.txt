@@ -1,0 +1,19 @@
+=== HITO 2: EXPLOIT EXITOSO ===
+Fecha: Tue May 19 00:50:33 UTC 2026
+Hostname: copy-fail-Keyla-Imba
+Identidad POST-exploit: uid=0(root) gid=1001(student) groups=1001(student)
+Kernel: 6.12.0
+SHA256 del exploit usado:
+3e664ed158d0e32b1f092f02770d19a7bdc21677335582bbc159330bc50e88d2  ./exploit_static
+
+--- Salida del exploit ---
+[+] Elevando privilegios a nivel de Kernel...
+[+] Abriendo shell de root directa...
+uid=0(root) gid=1001(student) groups=1001(student)
+
+Explanation
+
+Since the GitHub Codespaces environment installs Python in non-standard locations, the original script could not find the standard library (stdlib). As a result, within the virtual machine, Python would crash due to encoding errors or missing modules.
+Writing the exploit in C and compiling it statically (-static) embedded all the necessary libraries directly into the file itself. This eliminated any dependency on Python, allowing the program to communicate directly with the kernel and execute the attack cleanly.
+chmod 4755 was added to the su command and busybox in the packaging script so that, once the exploit tricks the kernel in memory, the operating system has the necessary permissions on the disk to grant you the root prompt.
+
