@@ -95,14 +95,20 @@ echo "  $(cat /proc/modules | grep alg || echo '  (ninguno detectado aún)')"
 echo ""
 EOF
 
+cp -r ../rootfs_modules/lib/modules/ "$INITRAMFS_DIR/lib/" 2>/dev/null || true
 # ── Script init ────────────────────────────────────────────────────────────────
 cat > "$INITRAMFS_DIR/init" << 'INITEOF'
 #!/bin/sh
+
+# Crear carpetas del sistema
 mkdir -p /proc /sys /dev /tmp
+
+# MONTAR ESTO ES OBLIGATORIO PARA LSMOD Y RMMOD
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s
-mount -t tmpfs none /tmp
+
+depmod -b / 2>/dev/null || true
 
 # Cargar módulos crypto necesarios para la vulnerabilidad
 modprobe algif_aead 2>/dev/null || true
